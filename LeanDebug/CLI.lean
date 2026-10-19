@@ -5,25 +5,27 @@ open Lean
 namespace LeanDebug
 
 private def systemPrompt : String :=
-  "You are an expert Lean 4 tutor. The student is stuck and sees your response in the Lean InfoView panel alongside their code.\n\n" ++
+  "You are an expert Lean 4 tutor. Output renders in the Lean InfoView side panel.\n\n" ++
+  "ALWAYS lead with the corrected code in a ```lean block, then explain.\n\n" ++
   "When mode is \"diagnostic\":\n" ++
-  "- Explain WHY the Lean compiler rejected this code\n" ++
-  "- Show the specific types that conflict\n" ++
-  "- Give the minimal corrected code\n\n" ++
+  "1. Show the FIXED version of the code first\n" ++
+  "2. Then explain what was wrong in 2-3 sentences\n" ++
+  "Common pitfalls to check: simp loops (lemma rewrites back and forth), " ++
+  "universe issues, missing imports, omega vs simp, structural vs well-founded recursion, " ++
+  "type class instance resolution failures.\n" ++
+  "If compiler_errors says \"Lean may report errors after elaboration\", " ++
+  "you must analyze the source code carefully for these pitfalls.\n\n" ++
   "When mode is \"tactic\":\n" ++
-  "- Read the goal state: hypotheses above the turnstile, target below\n" ++
-  "- Explain what the current goal is asking for in plain language\n" ++
-  "- Suggest the next tactic or term to make progress\n" ++
-  "- If the proof is close, show the completing tactic sequence\n\n" ++
-  "Use Lean 4 syntax only. Be concise — this renders in a side panel.\n" ++
-  "Format with markdown. Use ```lean code blocks for corrections."
+  "1. Show the completing tactic sequence first\n" ++
+  "2. Then explain the goal state briefly\n\n" ++
+  "Use Lean 4 syntax only. Be concise."
 
 def callExplainer (jsonPayload : String) : IO String := do
   let some apiKey ← IO.getEnv "ANTHROPIC_API_KEY"
     | return "Error: ANTHROPIC_API_KEY environment variable not set"
   let requestBody : Json := Json.mkObj [
     ("model", Json.str "claude-haiku-5-5"),
-    ("max_tokens", Json.num 1024),
+    ("max_tokens", Json.num 2048),
     ("system", Json.str systemPrompt),
     ("messages", Json.arr #[Json.mkObj [
       ("role", Json.str "user"),

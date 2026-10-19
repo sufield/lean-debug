@@ -6,38 +6,47 @@ open Lean Elab Command
 
 namespace LeanDebug
 
+private def verbose : IO Bool := do
+  let v ← IO.getEnv "LEAN_DEBUG_VERBOSE"
+  return v.isSome
+
+private def trace (s : String) : IO Unit := do
+  if (← verbose) then
+    let stderr ← IO.getStderr
+    stderr.putStrLn s
+
 syntax (name := debugCmd) "#debug" command : command
 
 @[command_elab debugCmd]
 def elabDebug : CommandElab := fun stx => do
   let cmd := stx[1]
-  let prevMsgs := (← get).messages
-  modify fun st => { st with messages := {} }
-  elabCommand cmd
-  let newMsgs := (← get).messages
-  modify fun st => { st with messages := prevMsgs ++ newMsgs }
-  let errorMsgs := newMsgs.toArray.filter fun msg =>
-    msg.severity == .error || msg.severity == .warning
-  if errorMsgs.isEmpty then
-    logInfo "[debug] no diagnostics from this command."
-    return
-  let fileMap ← getFileMap
+  trace "[lean-debug] elaborating command..."
+  try
+    elabCommand cmd
+  catch _ => pure ()
   let fileName ← getFileName
-  let mut diagArr : Array DiagnosticJson := #[]
+  let cmdSrc := cmd.reprint.getD s!"{cmd}"
+  trace s!"[lean-debug] source extracted ({cmdSrc.length} chars)"
+  let allMsgs := (← get).messages.toArray
+  let errorMsgs := allMsgs.filter fun msg =>
+    msg.severity == .error || msg.severity == .warning
+  let mut errTexts : Array String := #[]
   for msg in errorMsgs do
     let fmt ← msg.data.format
-    let text := fmt.pretty
-    diagArr := diagArr.push {
-      line := msg.pos.line
-      column := msg.pos.column
-      severity := if msg.severity == .error then "error" else "warning"
-      message := text
-    }
-  let pos := (← getRef).getPos?.getD 0
-  let line := fileMap.toPosition pos |>.line
-  let ctx := extractContext fileMap line 20
-  let payload := buildPayload "diagnostic" diagArr none ctx fileName
-  let result ← callExplainer payload
+    errTexts := errTexts.push fmt.pretty
+  let errSection := if errTexts.isEmpty then
+    "(Lean may report errors after elaboration — analyze the code for issues)"
+  else
+    String.intercalate "\n\n" errTexts.toList
+  let payload := Json.mkObj [
+    ("mode", Json.str "diagnostic"),
+    ("file_path", Json.str fileName),
+    ("source_code", Json.str cmdSrc),
+    ("compiler_errors", Json.str errSection)
+  ]
+  trace "[lean-debug] calling Claude API..."
+  let result ← callExplainer payload.compress
+  trace s!"[lean-debug] response received ({result.length} chars)"
   logInfo m!"{result}"
 
 end LeanDebug
