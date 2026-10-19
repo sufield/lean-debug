@@ -6,21 +6,23 @@ open Lean Elab Command
 
 namespace LeanDebug
 
-elab "#debug" : command => do
-  let st ← get
-  let allMsgs := st.messages.toArray
-  let sevs := allMsgs.map fun m => match m.severity with
-    | .error => "error"
-    | .warning => "warning"
-    | .information => "info"
-  logInfo m!"[debug] total: {allMsgs.size}, severities: {sevs.toList}"
-  let fileMap ← getFileMap
-  let fileName ← getFileName
-  let errorMsgs := allMsgs.filter fun msg =>
+syntax (name := debugCmd) "#debug" command : command
+
+@[command_elab debugCmd]
+def elabDebug : CommandElab := fun stx => do
+  let cmd := stx[1]
+  let prevMsgs := (← get).messages
+  modify fun st => { st with messages := {} }
+  elabCommand cmd
+  let newMsgs := (← get).messages
+  modify fun st => { st with messages := prevMsgs ++ newMsgs }
+  let errorMsgs := newMsgs.toArray.filter fun msg =>
     msg.severity == .error || msg.severity == .warning
   if errorMsgs.isEmpty then
-    logInfo "[debug] no error/warning messages found — nothing to explain."
+    logInfo "[debug] no diagnostics from this command."
     return
+  let fileMap ← getFileMap
+  let fileName ← getFileName
   let mut diagArr : Array DiagnosticJson := #[]
   for msg in errorMsgs do
     let fmt ← msg.data.format
@@ -35,7 +37,6 @@ elab "#debug" : command => do
   let line := fileMap.toPosition pos |>.line
   let ctx := extractContext fileMap line 20
   let payload := buildPayload "diagnostic" diagArr none ctx fileName
-  logInfo m!"[debug] sending {diagArr.size} diagnostics to Claude..."
   let result ← callExplainer payload
   logInfo m!"{result}"
 

@@ -1,14 +1,14 @@
 # LeanDebug
 
-AI-powered `#debug` command and `debug` tactic for Lean 4. Place them in your file to get LLM explanations of compiler errors and tactic goals directly in InfoView.
+AI-powered `#debug` command and `debug` tactic for Lean 4. Get LLM explanations of compiler errors and tactic goals directly in InfoView.
 
-Pure Lean 4 — no external binaries. Uses `curl` (present on every system) to call the Claude API.
+Pure Lean 4 — no external binaries. Uses `curl` to call the Claude API.
 
 ## Requirements
 
 - Lean 4.35+
 - `curl` on PATH
-- `ANTHROPIC_API_KEY` environment variable set
+- `ANTHROPIC_API_KEY` environment variable (workspace-scoped key from console.anthropic.com)
 
 ## Install
 
@@ -23,17 +23,28 @@ rev = "main"
 
 Then `lake update && lake build`.
 
+## Setup
+
+Export your API key so the Lean Language Server can see it:
+
+```bash
+# Add to ~/.bashrc or ~/.zshrc
+export ANTHROPIC_API_KEY="sk-ant-api03-..."
+```
+
+Restart VS Code after adding the key. If using a user-scoped key (`sk-ant-usr-*`), also set `ANTHROPIC_WORKSPACE_ID`.
+
 ## Usage
 
 ### `#debug` — explain compiler errors
 
-Wrap the problematic code with `#debug`. It elaborates the command, captures any errors, sends them to Claude, and prints the explanation in InfoView.
+Prefix the problematic code with `#debug`. It elaborates the command, captures errors, sends them to Claude, and prints the explanation in InfoView.
 
 ```lean
 import LeanDebug
 
 #debug def foo : Nat := "hello"
--- InfoView shows: WHY Lean rejected this, the type mismatch, and the fix
+-- InfoView: explains the type mismatch and shows the fix
 ```
 
 ### `debug` — explain tactic goals
@@ -45,7 +56,7 @@ import LeanDebug
 
 theorem bar (p q : Prop) (hp : p) (hq : q) : p ∧ q := by
   debug
-  -- InfoView shows: goal explanation + suggested tactic
+  -- InfoView: explains the goal and suggests tactics
   exact ⟨hp, hq⟩
 ```
 
@@ -53,19 +64,25 @@ The `debug` tactic is read-only — it does not close or modify the goal.
 
 ### `#cheatsheet` — unicode input reference
 
-Displays a symbol → keystroke table in InfoView. No API key needed.
+Displays a three-column table (symbol, keystroke, meaning) in InfoView. No API key needed.
 
 ```lean
 import LeanDebug
 
 #cheatsheet
--- InfoView shows: →  \to, ←  \l, ∀  \forall, ...
+-- InfoView shows:
+-- Symbol  Input       Meaning
+-- ──────  ──────────  ──────────────────────────
+-- →       \to         function type, implication
+-- ∘       \o          function composition
+-- ·       \.          placeholder / function composition
+-- ...
 ```
 
 ## How it works
 
-1. The Lean elaborator gathers diagnostics and/or goal state
-2. Builds a JSON payload with source context (±10 lines)
+1. `#debug` wraps the command, elaborates it, and captures error messages
+2. Builds a JSON payload with diagnostics and source context
 3. Calls `curl` against the Claude API via `IO.Process.output`
-4. Parses the response with `Lean.Json`
+4. Parses the JSON response (skips thinking blocks, extracts text)
 5. The result appears in InfoView via `logInfo`
