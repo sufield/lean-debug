@@ -1,0 +1,13 @@
+name = "lean-debug-demo"
+version = "0.1.0"
+defaultTargets = ["lean-debug-demo"]
+
+[[lean_lib]]
+name = "LeanDebugDemo"
+
+[[lean_lib]]
+name = "LeanDebug"
+
+[[lean_exe]]
+name = "lean-debug-demo"
+root = "Main"
