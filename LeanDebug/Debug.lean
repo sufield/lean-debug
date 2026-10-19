@@ -12,13 +12,19 @@ elab "#debug " cmd:command : command => do
   elabCommand cmd
   let newMsgs := (← get).messages
   modify fun st => { st with messages := prevMsgs ++ newMsgs }
-  let fileMap ← getFileMap
-  let fileName ← getFileName
-  let errorMsgs := newMsgs.toArray.filter fun msg =>
+  let allNew := newMsgs.toArray
+  let sevs := allNew.map fun m => match m.severity with
+    | .error => "error"
+    | .warning => "warning"
+    | .information => "info"
+  logInfo m!"[debug] captured {allNew.size} messages: {sevs.toList}"
+  let errorMsgs := allNew.filter fun msg =>
     msg.severity == .error || msg.severity == .warning
   if errorMsgs.isEmpty then
-    logInfo "No diagnostics from this command."
+    logInfo "[debug] no error/warning diagnostics to explain."
     return
+  let fileMap ← getFileMap
+  let fileName ← getFileName
   let mut diagArr : Array DiagnosticJson := #[]
   for msg in errorMsgs do
     let fmt ← msg.data.format
