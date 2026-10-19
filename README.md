@@ -2,23 +2,15 @@
 
 AI-powered `#debug` command and `debug` tactic for Lean 4. Place them in your file to get LLM explanations of compiler errors and tactic goals directly in InfoView.
 
+Pure Lean 4 — no external binaries. Uses `curl` (present on every system) to call the Claude API.
+
 ## Requirements
 
 - Lean 4.35+
-- Go 1.22+ (to build the `lean-explain` CLI)
+- `curl` on PATH
 - `ANTHROPIC_API_KEY` environment variable set
 
 ## Install
-
-### 1. Build the Go CLI
-
-```bash
-cd lean-explain/cmd/lean-explain
-go build -o lean-explain .
-cp lean-explain ~/.local/bin/   # or anywhere on PATH
-```
-
-### 2. Add as a Lake dependency
 
 In your project's `lakefile.toml`:
 
@@ -75,6 +67,6 @@ import LeanDebug
 
 1. The Lean elaborator gathers diagnostics and/or goal state
 2. Builds a JSON payload with source context (±10 lines)
-3. Pipes it to the `lean-explain` binary via stdin
-4. `lean-explain` calls the Claude API and returns the explanation
+3. Calls `curl` against the Claude API via `IO.Process.output`
+4. Parses the response with `Lean.Json`
 5. The result appears in InfoView via `logInfo`
