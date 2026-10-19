@@ -17,23 +17,22 @@ In your project's `lakefile.toml`:
 ```toml
 [[require]]
 name = "LeanDebug"
-path = "/path/to/lean-debug"
+git = "https://github.com/sufield/lean-debug"
+rev = "main"
 ```
 
-Then `lake build` to fetch it.
+Then `lake update && lake build`.
 
 ## Usage
 
 ### `#debug` — explain compiler errors
 
-Place `#debug` after code that has errors. It collects all diagnostics above it, sends them to Claude, and prints the explanation in InfoView.
+Wrap the problematic code with `#debug`. It elaborates the command, captures any errors, sends them to Claude, and prints the explanation in InfoView.
 
 ```lean
 import LeanDebug
 
-def foo : Nat := "hello"
-
-#debug
+#debug def foo : Nat := "hello"
 -- InfoView shows: WHY Lean rejected this, the type mismatch, and the fix
 ```
 
